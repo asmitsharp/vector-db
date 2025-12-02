@@ -3,6 +3,7 @@ package phase1
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 // vector represents a single vector with its metadata
@@ -11,6 +12,13 @@ type Vector struct {
 	Data     []float64
 	MetaData map[string]string
 	norm     float64 // cache magnitude of vector for performance
+}
+
+type SearchResult struct {
+	ID         string
+	Similarity float64
+	Metadata   map[string]string
+	Vector     []float64
 }
 
 func NewVector(id string, data []float64, metadata map[string]string) *Vector {
@@ -66,7 +74,47 @@ func (db *VectorDB) Insert(id string, data []float64, metadata map[string]string
 	db.vectors = append(db.vectors, v)
 
 	return nil
+}
 
+// Search finds the k most similar vectors to the query
+func (db *VectorDB) Search(query []float64, k int) ([]SearchResult, error) {
+	if len(query) == 0 {
+		return nil, fmt.Errorf("Your query is empty.")
+	}
+
+	if len(db.vectors) == 0 {
+		return []SearchResult{}, nil
+	}
+
+	expectedDim := len(db.vectors[0].Data)
+	if expectedDim != len(query) {
+		return nil, fmt.Errorf("query dimension mismatch: got %d, expected %d", len(query), expectedDim)
+	}
+
+	queryNorm := magnitude(query)
+
+	result := make([]SearchResult, len(db.vectors))
+
+	for i, v := range db.vectors {
+		similarity := cosineSimilarityOptimized(query, v.Data, queryNorm, v.norm)
+
+		result[i] = SearchResult{
+			ID:         v.ID,
+			Similarity: similarity,
+			Metadata:   v.MetaData,
+			Vector:     v.Data,
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Similarity > result[j].Similarity
+	})
+
+	if k > len(result) {
+		k = len(result)
+	}
+
+	return result[:k], nil
 }
 
 // dot product a.b = a1*b1 + a2*b2 .... + an*bn
@@ -115,4 +163,13 @@ func cosineSimilarity(a, b []float64) float64 {
 	cosine = dotP / (magnitudeA * magnitudeB)
 
 	return cosine
+}
+
+func cosineSimilarityOptimized(a, b []float64, norm, queryNorm float64) float64 {
+	dotP := dotProduct(a, b)
+	if norm == 0 || queryNorm == 0 {
+		return 0.0
+	}
+
+	return dotP / (norm * queryNorm)
 }
