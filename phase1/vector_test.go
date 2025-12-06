@@ -158,8 +158,8 @@ func TestVectorDBErrors(t *testing.T) {
 	}
 }
 
-func BenchmarkSearch(b *testing.B) {
-	sizes := []int{100, 1000, 10000}
+func BenchmarkNormalSearch(b *testing.B) {
+	sizes := []int{10000, 100000}
 
 	for _, size := range sizes {
 		db := createTestDB(size, 128)
@@ -169,6 +169,22 @@ func BenchmarkSearch(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				db.Search(query, 10)
+			}
+		})
+	}
+}
+
+func BenchmarkConcurrentSearch(b *testing.B) {
+	sizes := []int{10000, 100000}
+
+	for _, size := range sizes {
+		db := createTestDB(size, 128)
+		query := randomVector(128)
+
+		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				db.SearchConcurrent(query, 10)
 			}
 		})
 	}
